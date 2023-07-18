@@ -7,4 +7,9 @@ from . import models
 # Register your models here.
 @admin.register(models.User)
 class CustomUserAdmin(UserAdmin):
-    pass
+    list_filter = ()
+    filter_horizontal = ()
+    fieldsets = ()
+
+
+admin.site.register(models.UserProfile)
