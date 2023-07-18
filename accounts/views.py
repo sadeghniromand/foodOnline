@@ -1,6 +1,8 @@
 from django.shortcuts import render, redirect
 from django.views.generic import CreateView
 from django.contrib import messages
+
+from vendor.forms import VendorForm
 from . import forms, models
 
 # Create your views here.
@@ -19,7 +21,7 @@ def register_user(request):
             user.set_password(password)
             user.role = models.User.CUSTOMER
             user.save()
-            messages.success(request,'Your account has been registered successfully')
+            messages.success(request, 'Your account has been registered successfully')
             """ Create the user using create_user method """
 
             # first_name = form.cleaned_data['first_name']
@@ -51,3 +53,26 @@ class CreateUserRegisterView(CreateView):
 
     def get_success_url(self):
         return redirect('registerUser')
+
+
+def register_vendor(request):
+    if request.method == "POST":
+        form = forms.UserForm(request.POST)
+        v_form = VendorForm(request.POST, request.FILES)
+        if form.is_valid() and v_form.is_valid():
+            password = form.cleaned_data['password']
+            user = form.save(commit=False)
+            user.set_password(password)
+            user.role = models.User.Vendor
+            user.save()
+            vendor = v_form.save(commit=False)
+            vendor.user = user
+            vendor.user_profile = user.userprofile
+            vendor.save()
+            messages.success(request, 'Your account has been registered successfully! Please wait for the approval.')
+            return redirect('registerVendor')
+    else:
+        form = forms.UserForm()
+        v_form = VendorForm()
+
+    return render(request, 'accounts/register_vendor.html', context={'form': form, 'v_form': v_form})
