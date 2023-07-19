@@ -1,12 +1,13 @@
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.tokens import default_token_generator
 from django.shortcuts import render, redirect
 from django.views.generic import CreateView
 from django.contrib import messages, auth
 from django.core.exceptions import PermissionDenied
-
+from django.utils.http import urlsafe_base64_decode
 from vendor.forms import VendorForm
 from . import forms, models
-from .utils import detect_user
+from .utils import detect_user, send_verification_email
 
 
 # Restrict the vendor from accessing the customer page
@@ -39,6 +40,7 @@ def register_user(request):
             user.set_password(password)
             user.role = models.User.CUSTOMER
             user.save()
+            send_verification_email(request, user)
             messages.success(request, 'Your account has been registered successfully')
             """ Create the user using create_user method """
 
@@ -87,6 +89,7 @@ def register_vendor(request):
             vendor.user = user
             vendor.user_profile = user.userprofile
             vendor.save()
+            send_verification_email(request, user)
             messages.success(request, 'Your account has been registered successfully! Please wait for the approval.')
             return redirect('registerVendor')
     else:
@@ -94,6 +97,24 @@ def register_vendor(request):
         v_form = VendorForm()
 
     return render(request, 'accounts/register_vendor.html', context={'form': form, 'v_form': v_form})
+
+
+def activate(request, uidb64, token):
+    # Activate the user by setting the is_active status to True
+    try:
+        uid = urlsafe_base64_decode(uidb64).decode()
+        user = models.User._default_manger.get(pk=uid)
+    except(TypeError, ValueError, OverflowError, models.User.DoesNotExist):
+        user = None
+
+    if user is not None and default_token_generator.check_token(token):
+        user.is_active = True
+        user.save()
+        messages.success(request, 'Congratulation! your account is activated.')
+        return redirect('myAccount')
+    else:
+        messages.error(request, 'invalid activation link.')
+        return redirect('myAccount')
 
 
 def login(request):
@@ -129,7 +150,7 @@ def my_account(request):
 
 
 @login_required(login_url='login')
-@user_passes_test(check_role_customer,)
+@user_passes_test(check_role_customer, )
 def cust_dashboard(request):
     return render(request, 'accounts/cust_dashboard.html')
 
