@@ -7,7 +7,7 @@ from django.core.exceptions import PermissionDenied
 from django.utils.http import urlsafe_base64_decode
 from vendor.forms import VendorForm
 from . import forms, models
-from .utils import detect_user, send_verification_email
+from .utils import detect_user, send_verification_email, send_password_reset_email
 
 
 # Restrict the vendor from accessing the customer page
@@ -142,6 +142,10 @@ def logout(request):
     return redirect('login')
 
 
+# <-------------------------------------------------------------------------------------------->
+""" DASHBOARD VIEWS """
+
+
 @login_required(login_url='login')
 def my_account(request):
     user = request.user
@@ -159,3 +163,59 @@ def cust_dashboard(request):
 @user_passes_test(check_role_vendor)
 def vendor_dashboard(request):
     return render(request, 'accounts/vendor_dashboard.html')
+
+
+# <-------------------------------------------------------------------------------------------->
+""" FORGET PASSWORD VIEWS """
+
+
+def forgot_password(request):
+    if request.method == "POST":
+        email = request.POST['email']
+        if models.User.objects.filter(email=email).exists():
+            user = models.User.objects.get(email__exact=email)
+            send_password_reset_email(request, user)
+            messages.success(request, 'Password reset link has been send to your email address.')
+            return redirect('login')
+        else:
+            messages.error(request, 'Account does not exist')
+            return redirect('forgot_password')
+    return render(request, 'accounts/forgot_password.html')
+
+
+def reset_password_validate(request, uidb64, token):
+    try:
+        uid = urlsafe_base64_decode(uidb64).decode()
+        user = models.User._default_manger.get(pk=uid)
+    except(TypeError, ValueError, OverflowError, models.User.DoesNotExist):
+        user = None
+
+    if user is not None and default_token_generator.check_token(token):
+        request.session['uid'] = uid
+        messages.info(request, 'Please reset your password')
+        return redirect('reset_password')
+    else:
+        messages.error(request, 'This link has been expired')
+        return redirect('myAccount')
+
+
+def reset_password(request):
+    if request.method == "POST":
+        password = request.POST['password']
+        confirm_password = request.POST['confirm_password']
+
+        if password == confirm_password:
+            pk = request.session.get('uid')
+            if pk:
+                user = models.User.objects.get(pk=pk)
+                user.set_password(password)
+                user.is_active = True
+                user.save()
+                messages.success(request, 'Password reset successfully.')
+                return redirect('login')
+            else:
+                return redirect('myAccount')
+
+        else:
+            messages.error(request, 'Password do not match!')
+            return redirect('reset_password')
